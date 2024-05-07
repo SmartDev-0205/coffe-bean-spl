@@ -1,7 +1,8 @@
-import * as anchor from "@project-serum/anchor";
-import { Program } from "@project-serum/anchor";
+import * as anchor from "@coral-xyz/anchor";
+import { Program } from "@coral-xyz/anchor";
+
 import { CoffeeBean } from "../target/types/coffee_bean";
-import { IDL } from "../target/types/coffee_bean";
+
 import {
   LAMPORTS_PER_SOL,
   PublicKey,
@@ -13,6 +14,7 @@ import {
   clusterApiUrl,
   Connection
 } from "@solana/web3.js";
+
 
 const GLOBAL_STATE_SEED = "GLOBAL_STATE_SEED";
 const VAULT_SEED = "VAULT_SEED";
@@ -26,12 +28,22 @@ const delay = (delayInms) => {
   });
 }
 
-describe("baked-beans", () => {
-  // Configure the client to use the local cluster.
-  let provider = anchor.Provider.env();
-  anchor.setProvider(provider);
+export const pda = (
+  seeds: (Buffer | Uint8Array)[],
+  programId: anchor.web3.PublicKey
+): anchor.web3.PublicKey => {
+  const [pdaKey] = anchor.web3.PublicKey.findProgramAddressSync(
+    seeds,
+    programId
+  );
+  return pdaKey;
+}
 
-  const program = anchor.workspace.BakedBeans as Program<CoffeeBean>;
+describe("coffee-bean", () => {
+  // Configure the client to use the local cluster.
+  let provider = anchor.AnchorProvider.env();
+  anchor.setProvider(provider);
+  const program = anchor.workspace.CoffeeBean as Program<CoffeeBean>;
 
   let user = Keypair.generate();
   console.log('user =', user.publicKey.toBase58());
@@ -43,15 +55,9 @@ describe("baked-beans", () => {
     await airdropSol(provider, user.publicKey, 10000000000); // 10 sol
     await airdropSol(provider, admin.publicKey, 10000000000);
     console.log(program.programId.toBase58());
-    const [globalStateKey] = await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from(GLOBAL_STATE_SEED)],
-      program.programId
-    );
+    const globalStateKey = await pda([Buffer.from(GLOBAL_STATE_SEED)], program.programId);
     console.log(globalStateKey.toBase58());
-    const [vaultKey] = await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from(VAULT_SEED)],
-      program.programId
-    );
+    const vaultKey = await pda([Buffer.from(VAULT_SEED)], program.programId);
     console.log(vaultKey.toBase58());
     const tx = new Transaction().add(
       await program.methods
@@ -73,22 +79,12 @@ describe("baked-beans", () => {
   });
 
   it("buy and hatch eggs", async () => {
-    const [globalStateKey] = await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from(GLOBAL_STATE_SEED)],
-      program.programId
-    );
-    const [vaultKey] = await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from(VAULT_SEED)],
-      program.programId
-    );
-    const [userStateKey] = await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from(USER_STATE_SEED), user.publicKey.toBuffer()],
-      program.programId
-    );
-    const [adminUserStateKey] = await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from(USER_STATE_SEED), admin.publicKey.toBuffer()],
-      program.programId
-    );
+    const globalStateKey = await pda([Buffer.from(GLOBAL_STATE_SEED)], program.programId);
+    console.log(globalStateKey.toBase58());
+    const vaultKey = await pda([Buffer.from(VAULT_SEED)], program.programId);
+    console.log(vaultKey.toBase58());
+    const userStateKey = await pda([Buffer.from(USER_STATE_SEED), user.publicKey.toBuffer()], program.programId);
+    const adminUserStateKey = await pda([Buffer.from(USER_STATE_SEED), admin.publicKey.toBuffer()], program.programId);
     let globalData = await program.account.globalState.fetch(globalStateKey);
     const tx = new Transaction().add(
       await program.methods
@@ -119,7 +115,7 @@ describe("baked-beans", () => {
     );
     ///let simulRes = await provider.simulate(tx, [user]);
     ///console.log('simulRes =', simulRes);
-    
+
     let txHash = await sendAndConfirmTransaction(provider.connection, tx, [user]);
     console.log("Your transaction signature", txHash);
     let solBal = await provider.connection.getBalance(user.publicKey);
@@ -131,18 +127,12 @@ describe("baked-beans", () => {
 
   it("sell eggs", async () => {
     await delay(2000);
-    const [globalStateKey] = await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from(GLOBAL_STATE_SEED)],
-      program.programId
-    );
-    const [vaultKey] = await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from(VAULT_SEED)],
-      program.programId
-    );
-    const [userStateKey] = await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from(USER_STATE_SEED), user.publicKey.toBuffer()],
-      program.programId
-    );
+    const globalStateKey = await pda([Buffer.from(GLOBAL_STATE_SEED)], program.programId);
+    console.log(globalStateKey.toBase58());
+    const vaultKey = await pda([Buffer.from(VAULT_SEED)], program.programId);
+    console.log(vaultKey.toBase58());
+    const userStateKey = await pda([Buffer.from(USER_STATE_SEED), user.publicKey.toBuffer()], program.programId);
+    const adminUserStateKey = await pda([Buffer.from(USER_STATE_SEED), admin.publicKey.toBuffer()], program.programId);
     let globalData = await program.account.globalState.fetch(globalStateKey);
     const tx = new Transaction().add(
       await program.methods
@@ -157,24 +147,20 @@ describe("baked-beans", () => {
         })
         .instruction()
     );
-    let simulRes = await provider.simulate(tx, [user]);
-    console.log('simulRes =', simulRes);
-    
     let txHash = await sendAndConfirmTransaction(provider.connection, tx, [user]);
     console.log("Your transaction signature", txHash);
-    
     let solBal = await provider.connection.getBalance(user.publicKey);
     console.log(solBal);
   })
-  it("getInfo", async () => {
-    let userStateKey = new PublicKey("AZ8Zjm3qBbxLXWdxu44LnkuYQ1MJdmjfFgoNcjWnZTqD");
-    let connection = new Connection(clusterApiUrl("devnet"));
-    let provider1 = new anchor.Provider(connection, provider.wallet, anchor.Provider.defaultOptions())
-    const otherProgram = new anchor.Program(IDL, new PublicKey("557BPiUp8WSumh7PcLpXE12VZppRhiezdHRdfhKAVANn"), provider1);
+  // it("getInfo", async () => {
+  //   let userStateKey = new PublicKey("AZ8Zjm3qBbxLXWdxu44LnkuYQ1MJdmjfFgoNcjWnZTqD");
+  //   let connection = new Connection(clusterApiUrl("devnet"));
+  //   let provider1 = new anchor.Provider(connection, provider.wallet, anchor.Provider.defaultOptions())
+  //   const otherProgram = new anchor.Program(IDL, new PublicKey("557BPiUp8WSumh7PcLpXE12VZppRhiezdHRdfhKAVANn"), provider1);
 
-    let userStateData = await otherProgram.account.userState.fetch(userStateKey);
-    console.log("userStateData.miners", userStateData.miners.toNumber());
-  })
+  //   let userStateData = await otherProgram.account.userState.fetch(userStateKey);
+  //   console.log("userStateData.miners", userStateData.miners.toNumber());
+  // })
 });
 
 export const airdropSol = async (

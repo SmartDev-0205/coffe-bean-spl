@@ -30,6 +30,7 @@ pub struct Initialize<'info> {
 
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
+    pub clock: Sysvar<'info, Clock>,
 }
 
 impl<'info> Initialize<'info> {
