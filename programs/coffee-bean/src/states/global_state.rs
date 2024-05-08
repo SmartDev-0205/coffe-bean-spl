@@ -7,6 +7,8 @@ pub struct GlobalState {
     pub is_initialized: u8,
     // admin
     pub authority: Pubkey,
+    // mint token
+    pub token_mint: Pubkey,
     // vault
     pub vault: Pubkey,
     // treasury

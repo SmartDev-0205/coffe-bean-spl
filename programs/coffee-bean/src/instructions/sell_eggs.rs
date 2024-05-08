@@ -1,6 +1,6 @@
 use crate::{constants::*, error::*,states::*, utils::*};
 use anchor_lang::prelude::*;
-use solana_program::{program::invoke_signed, system_instruction};
+use anchor_spl::token::{Mint, Token, Transfer};
 #[derive(Accounts)]
 pub struct SellEggs<'info> {
     #[account(mut)]
@@ -24,7 +24,8 @@ pub struct SellEggs<'info> {
     #[account(mut)]
     /// CHECK: this should be checked with address in global_state
     pub treasury: AccountInfo<'info>,
-
+    /// CHECK: we read this key only
+    pub token_mint: Account<'info, Mint>,
     #[account(
         mut,
         seeds = [USER_STATE_SEED, user.key().as_ref()],
@@ -33,7 +34,10 @@ pub struct SellEggs<'info> {
     )]
     pub user_state: Account<'info, UserState>,
 
+    pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+    pub clock: Sysvar<'info, Clock>,
 }
 
 impl<'info> SellEggs<'info> {
@@ -76,25 +80,34 @@ pub fn handle(ctx: Context<SellEggs>) -> Result<()> {
 
     // send fee to treasury
     let bump = ctx.bumps.vault;
-    invoke_signed(
-        &system_instruction::transfer(&accts.vault.key(), &accts.treasury.key(), fee),
-        &[
-            accts.vault.to_account_info().clone(),
-            accts.treasury.clone(),
-            accts.system_program.to_account_info().clone(),
-        ],
-        &[&[VAULT_SEED, &[bump]]],
+    anchor_spl::token::transfer(
+        CpiContext::new_with_signer(
+            accts.token_program.to_account_info(),
+            Transfer {
+                from: accts.vault.to_account_info(),
+                to: accts.treasury.to_account_info(),
+                authority: accts.user.to_account_info(),
+            },  
+            &[&[VAULT_SEED, &[bump]]],
+        ),
+        fee,
     )?;
-    // add vault <- sol_amount - fee
-    invoke_signed(
-        &system_instruction::transfer(&accts.vault.key(), &accts.user.key(), real_val),
-        &[
-            accts.vault.to_account_info().clone(),
-            accts.user.to_account_info().clone(),
-            accts.system_program.to_account_info().clone(),
-        ],
-        &[&[VAULT_SEED, &[bump]]],
+
+
+    anchor_spl::token::transfer(
+        CpiContext::new_with_signer(
+            accts.token_program.to_account_info(),
+            Transfer {
+                from: accts.vault.to_account_info(),
+                to: accts.user.to_account_info(),
+                authority: accts.user.to_account_info(),
+            },
+            &[&[VAULT_SEED, &[bump]]],
+        ),
+        real_val,
     )?;
+
+
 
     // lamports should be bigger than zero to prevent rent exemption
     let rent = Rent::default();

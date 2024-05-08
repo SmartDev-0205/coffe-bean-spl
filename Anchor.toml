@@ -4,14 +4,14 @@
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-coffee_bean = "HQtuvPE1boXZvbg1uiiSjzm6HQNUbkqShD6bmKabpiVe"
+[programs.devnet]
+coffee_bean = "2hJgsqHnXLeTWKBYfcQXotugnUt8AxSFKAVYfx4pjzNi"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

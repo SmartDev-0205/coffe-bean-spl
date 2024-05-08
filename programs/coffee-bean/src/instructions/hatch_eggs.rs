@@ -15,6 +15,8 @@ pub struct HatchEggs<'info> {
 
     #[account(
         mut,
+        seeds = [VAULT_SEED],
+        bump
     )]
     /// CHECK: this should be set by admin
     pub vault: AccountInfo<'info>,
@@ -33,7 +35,7 @@ pub struct HatchEggs<'info> {
     )]
     pub referral: AccountInfo<'info>,
     #[account(
-        init_if_needed,
+        init,
         seeds = [USER_STATE_SEED, referral.key().as_ref()],
         bump,
         payer = user,

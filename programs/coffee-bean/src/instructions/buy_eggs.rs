@@ -1,6 +1,7 @@
 use crate::{constants::*, error::*, states::*, utils::*};
 use anchor_lang::prelude::*;
-use solana_program::{program::invoke, system_instruction};
+use anchor_spl::token::{Mint, Token, Transfer};
+
 use std::mem::size_of;
 #[derive(Accounts)]
 pub struct BuyEggs<'info> {
@@ -17,15 +18,18 @@ pub struct BuyEggs<'info> {
     #[account(mut)]
     /// CHECK: this should be set by admin
     pub treasury: AccountInfo<'info>,
+    pub token_mint: Account<'info, Mint>,
 
     #[account(
         mut,
+        seeds = [VAULT_SEED],
+        bump
     )]
     /// CHECK: this should be set by admin
     pub vault: AccountInfo<'info>,
 
     #[account(
-        init_if_needed,
+        init,
         seeds = [USER_STATE_SEED, user.key().as_ref()],
         bump,
         payer = user,
@@ -33,8 +37,10 @@ pub struct BuyEggs<'info> {
     )]
     pub user_state: Account<'info, UserState>,
 
+    pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
+    pub clock: Sysvar<'info, Clock>,
 }
 
 pub fn handle(ctx: Context<BuyEggs>, sol_amount: u64) -> Result<()> {
@@ -61,24 +67,32 @@ pub fn handle(ctx: Context<BuyEggs>, sol_amount: u64) -> Result<()> {
     let sol_fee = dev_fee(&accts.global_state, sol_amount)?;
     let real_sol = sol_amount.checked_sub(sol_fee).unwrap();
 
-    // send sol_fee to treasury
-    invoke(
-        &system_instruction::transfer(&accts.user.key(), &accts.treasury.key(), sol_fee),
-        &[
-            accts.user.to_account_info().clone(),
-            accts.treasury.clone(),
-            accts.system_program.to_account_info().clone(),
-        ],
+    anchor_spl::token::transfer(
+        CpiContext::new(
+            accts.token_program.to_account_info(),
+            Transfer {
+                from: accts.user.to_account_info(),
+                to: accts.treasury.to_account_info(),
+                authority: accts.user.to_account_info(),
+            },
+        ),
+        sol_fee,
     )?;
-    // add vault <- sol_amount - fee
-    invoke(
-        &system_instruction::transfer(&accts.user.key(), &accts.vault.key(), real_sol),
-        &[
-            accts.user.to_account_info().clone(),
-            accts.vault.clone(),
-            accts.system_program.to_account_info().clone(),
-        ],
+
+    anchor_spl::token::transfer(
+        CpiContext::new(
+            accts.token_program.to_account_info(),
+            Transfer {
+                from: accts.user.to_account_info(),
+                to: accts.vault.to_account_info(),
+                authority: accts.user.to_account_info(),
+            },
+        ),
+        real_sol,
     )?;
+
+
+
     accts.user_state.claimed_eggs = accts
         .user_state
         .claimed_eggs

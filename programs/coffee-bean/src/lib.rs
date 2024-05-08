@@ -8,7 +8,7 @@ pub mod utils;
 
 use instructions::*;
 
-declare_id!("HQtuvPE1boXZvbg1uiiSjzm6HQNUbkqShD6bmKabpiVe");
+declare_id!("2hJgsqHnXLeTWKBYfcQXotugnUt8AxSFKAVYfx4pjzNi");
 
 #[program]
 pub mod coffee_bean {

@@ -1,7 +1,6 @@
-use crate::{constants::*, error::*, states::*};
+use crate::{constants::*,error::*,states::*, utils::*};
 use anchor_lang::prelude::*;
-use solana_program::{program::invoke, system_instruction};
-use std::mem::size_of;
+use anchor_spl::token::{Mint, Token, TokenAccount, Transfer};
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -9,25 +8,28 @@ pub struct Initialize<'info> {
     pub authority: Signer<'info>,
 
     #[account(
-        init_if_needed,
+        init,
         seeds = [GLOBAL_STATE_SEED],
         bump,
-        space = 8 + size_of::<GlobalState>(),
+        space = 8 + std::mem::size_of::<GlobalState>(),
         payer = authority,
     )]
     pub global_state: Account<'info, GlobalState>,
+    pub token_mint: Account<'info, Mint>,
 
     /// CHECK: this should be set by admin
     pub treasury: AccountInfo<'info>,
 
     #[account(
-        mut,
+        init,
         seeds = [VAULT_SEED],
-        bump
+        bump,
+        payer = authority,
+        space = std::mem::size_of::<TokenAccount>() + 8 
     )]
-    /// CHECK: this should be set by admin
-    pub vault: AccountInfo<'info>,
+    pub vault: Box<Account<'info, TokenAccount>>,
 
+    pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
     pub clock: Sysvar<'info, Clock>,
@@ -55,6 +57,7 @@ pub fn handle(ctx: Context<Initialize>, new_authority: Pubkey) -> Result<()> {
     accts.global_state.authority = new_authority;
     accts.global_state.vault = accts.vault.key();
     accts.global_state.treasury = accts.treasury.key();
+    accts.global_state.token_mint = accts.token_mint.key();
 
     accts.global_state.market_eggs = 108000000000;
     accts.global_state.dev_fee = 300; // means 3%
@@ -68,18 +71,17 @@ pub fn handle(ctx: Context<Initialize>, new_authority: Pubkey) -> Result<()> {
         .max(1)
         .saturating_sub(accts.vault.to_account_info().lamports());
     msg!("required lamports = {:?}", required_lamports);
-    invoke(
-        &system_instruction::transfer(
-            &accts.authority.key(),
-            &accts.vault.key(),
-            required_lamports,
+    anchor_spl::token::transfer(
+        CpiContext::new(
+            accts.token_program.to_account_info(),
+            Transfer {
+                from: accts.authority.to_account_info(),
+                to: accts.vault.to_account_info(),
+                authority: accts.authority.to_account_info(),
+            },
         ),
-        &[
-            accts.authority.to_account_info().clone(),
-            accts.vault.clone(),
-            accts.system_program.to_account_info().clone(),
-        ],
+        required_lamports,
     )?;
-    //Err(BeanError::NotAllowedAuthority.into())
+
     Ok(())
 }
